@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  vector.py
-#  
 import math
 
 class Vector2(object):
