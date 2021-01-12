@@ -7,7 +7,6 @@ import pathlib
 from noiseengine import NoiseEngine1D
 from vector import Vector2
   
-
 # get the path that this script is running from
 FILEPATH = str(pathlib.Path().absolute()) 
   
@@ -40,7 +39,6 @@ pygame.mixer.init()
 sound_blip = pygame.mixer.Sound(FILEPATH + '/sounds/blip.ogg')
 sound_blip2 = pygame.mixer.Sound(FILEPATH + '/sounds/blip2.ogg')
 sound_score = pygame.mixer.Sound(FILEPATH + '/sounds/score.ogg')
-
 
 # ======================================================================
 # load images 
@@ -122,9 +120,7 @@ def clamp(n, minn, maxn):
         return n
 
 #=======================================================================
-
 # Star class
-
 #=======================================================================
 
 class Star():
@@ -164,9 +160,7 @@ class Star():
 
 
 #=======================================================================
-
 # Starfield class
-
 #=======================================================================
 
 class StarField():
@@ -197,9 +191,7 @@ class StarField():
 
 
 #=======================================================================
-
 # Player class
-
 #=======================================================================
 
 class Player():
@@ -273,9 +265,7 @@ class Player():
 
 
 #=======================================================================
-
 # Balltrail class
-
 #=======================================================================
 
 class Balltrail():
@@ -323,9 +313,7 @@ class Balltrail():
 
 
 #=======================================================================
-
 # Ball class
-
 #=======================================================================
 
 class Ball():
@@ -391,9 +379,7 @@ class Ball():
         
 
 #=======================================================================
-
 # Arena class draws the game borders and scoreboard
-
 #=======================================================================
 
 class Arena():
@@ -424,11 +410,8 @@ class Arena():
 
 
 #=======================================================================
-
 # Game class 
-
 # Handles collisions and constraints and player movement
-
 #=======================================================================
 
 class Game():
