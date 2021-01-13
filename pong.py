@@ -7,8 +7,6 @@ import pathlib
 from noiseengine import NoiseEngine1D
 from vector import Vector2
   
-# get the path that this script is running from
-FILEPATH = str(pathlib.Path().absolute()) 
   
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 600
@@ -24,24 +22,15 @@ COLOUR_STARS = [100,50,255]
 
 # set mixer to 512 value to stop buffering causing sound delay
 # this must be called before anything else using mixer.pre_init()
-
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
+pygame.mixer.init()
 pygame.display.set_caption("Pong 2020")
 screen = pygame.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT])
 clock = pygame.time.Clock()
 
 # ======================================================================
-# initialise sound effects
-# ======================================================================
-
-pygame.mixer.init()
-sound_blip = pygame.mixer.Sound(FILEPATH + '/sounds/blip.ogg')
-sound_blip2 = pygame.mixer.Sound(FILEPATH + '/sounds/blip2.ogg')
-sound_score = pygame.mixer.Sound(FILEPATH + '/sounds/score.ogg')
-
-# ======================================================================
-# load images 
+# load images and sounds
 # ======================================================================
 
 # pngs are saved with a black background layer in gimp with no transparency
@@ -49,12 +38,18 @@ sound_score = pygame.mixer.Sound(FILEPATH + '/sounds/score.ogg')
 # instead I use set_colorkey to make black pixels transparent
 # and now I can set the alpha value of each image
 
-image_pong_title   = pygame.image.load(FILEPATH + '/png/pong_title.png').convert()
-image_pong_numbers = pygame.image.load(FILEPATH + '/png/pong_numbers.png').convert()
-image_pong_game    = pygame.image.load(FILEPATH + '/png/pong_game.png').convert()
-image_pong_over    = pygame.image.load(FILEPATH + '/png/pong_over.png').convert()
-image_pong_you     = pygame.image.load(FILEPATH + '/png/pong_you.png').convert()
-image_pong_won     = pygame.image.load(FILEPATH + '/png/pong_won.png').convert()
+# using pathlib functions to make this cross platform (hopefully)
+# get the path that this script is running from (current working dir)
+FILEPATH = pathlib.Path().cwd() 
+sound_blip         = pygame.mixer.Sound(str(FILEPATH.joinpath('sounds' ,'blip.ogg')))
+sound_blip2        = pygame.mixer.Sound(str(FILEPATH.joinpath('sounds' ,'blip2.ogg')))
+sound_score        = pygame.mixer.Sound(str(FILEPATH.joinpath('sounds' ,'score.ogg')))
+image_pong_title   = pygame.image.load(str(FILEPATH.joinpath('png' ,'pong_title.png'))).convert()
+image_pong_numbers = pygame.image.load(str(FILEPATH.joinpath('png' ,'pong_numbers.png'))).convert()
+image_pong_game    = pygame.image.load(str(FILEPATH.joinpath('png' ,'pong_game.png'))).convert()
+image_pong_over    = pygame.image.load(str(FILEPATH.joinpath('png' ,'pong_over.png'))).convert()
+image_pong_you     = pygame.image.load(str(FILEPATH.joinpath('png' ,'pong_you.png'))).convert()
+image_pong_won     = pygame.image.load(str(FILEPATH.joinpath('png' ,'pong_won.png'))).convert()
 
 # set the transparent colour, in my case black
 image_pong_title.set_colorkey(COLOUR_BLACK)
@@ -91,7 +86,6 @@ for loc in image_offsets:
     img = image_pong_numbers.subsurface(loc)
     image_numbers.append(img)
     
-
 # ======================================================================
 # gamestate constants to help code readability
 # ======================================================================
