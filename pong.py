@@ -551,8 +551,7 @@ class Game():
         
         if self.opponent.position.y < self.ball.position.y - self.opponent.height // 2:
             self.opponent.down()
-            
-        if self.opponent.position.y > self.ball.position.y - self.opponent.height // 2:
+        elif self.opponent.position.y > self.ball.position.y - self.opponent.height // 2:
             self.opponent.up()
             
         

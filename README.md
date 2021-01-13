@@ -1,4 +1,5 @@
-# pong
+# Pong
+
 Classic Pong game with starfield background and using OpenSimplex random noise to create a 'wind effect' on ball movement that changes smoothly with each hit of the ball on either paddle.
 
 Written using Python3 and PyGame. 
@@ -10,6 +11,10 @@ Requires OpenSimplex lib
 or
 
 >pip3 install opensimplex
+
+## Screenshot
+
+![screenshot](png/screenshot.png)
 
 ## Controls:
 
