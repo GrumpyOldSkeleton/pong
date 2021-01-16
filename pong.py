@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import timeit
 import pygame
 import math
 import random
@@ -7,7 +8,13 @@ import pathlib
 from noiseengine import NoiseEngine1D
 from vector import Vector2
   
-  
+# ======================================================================
+# constants to help code readability
+# ======================================================================
+
+GAME_STATE_INTRO       = 0
+GAME_STATE_IN_PROGRESS = 1
+GAME_STATE_OVER        = 2
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 600
 ORIGINX = SCREEN_WIDTH // 2
@@ -15,11 +22,12 @@ ORIGINY = SCREEN_HEIGHT // 2
 COLOUR_BLACK = [0,0,0]
 COLOUR_WHITE = [255,255,255]
 COLOUR_STARS = [100,50,255]
+PARTICALS_SPAWN_FROM_OPPONENT = 180
+PARTICALS_SPAWN_FROM_PLAYER   = 0
 
 # ======================================================================
 # setup pygame
 # ======================================================================
-
 # set mixer to 512 value to stop buffering causing sound delay
 # this must be called before anything else using mixer.pre_init()
 pygame.mixer.pre_init(44100, -16, 2, 512)
@@ -32,12 +40,10 @@ clock = pygame.time.Clock()
 # ======================================================================
 # load images and sounds
 # ======================================================================
-
 # pngs are saved with a black background layer in gimp with no transparency
 # note - use convert() and not convert_alpha()
 # instead I use set_colorkey to make black pixels transparent
 # and now I can set the alpha value of each image
-
 # using pathlib functions to make this cross platform (hopefully)
 # get the path that this script is running from (current working dir)
 FILEPATH = pathlib.Path().cwd() 
@@ -86,13 +92,6 @@ for loc in image_offsets:
     img = image_pong_numbers.subsurface(loc)
     image_numbers.append(img)
     
-# ======================================================================
-# gamestate constants to help code readability
-# ======================================================================
-
-GAME_INTRO = 0
-GAME_IN_PROGRESS = 1
-GAME_OVER = 2
 
 #=======================================================================
 # some utility functions
@@ -103,7 +102,6 @@ def maprange( a, b, val):
     (a1, a2), (b1, b2) = a, b
     return  b1 + ((val - a1) * (b2 - b1) / (a2 - a1)) 
         
-        
 def clamp(n, minn, maxn):
         
     if n < minn:
@@ -112,7 +110,107 @@ def clamp(n, minn, maxn):
         return maxn
     else:
         return n
+        
+#=======================================================================
+# Partical class
+#=======================================================================
 
+class Partical():
+    
+    def __init__(self, v, angle):
+        
+        self.pos = Vector2(v.x, v.y)
+        self.vel = Vector2(0, 0)
+        self.acc = Vector2(0,0)        
+        # set the initial acceleration of the partical
+        self.acc.setFromAngle(angle)
+        self.acc.normalise()
+        self.acc.mult(random.uniform(0.1, 0.7))
+        self.size = random.randint(1, 3)
+        self.alpha = 255
+        
+    def update(self):
+        
+        self.vel.add(self.acc)
+        self.pos.add(self.vel)
+        self.alpha -= abs(self.vel.y)
+        self.alpha = max(0,self.alpha)
+        
+    def draw(self):
+        
+        pygame.draw.rect(screen,[0, self.alpha, self.alpha],[self.pos.x,self.pos.y,self.size,self.size])
+        
+    def isOffScreen(self):
+        
+        return (self.pos.x < 0) or (self.pos.x > SCREEN_WIDTH) or (self.pos.y < 0) or (self.pos.y > SCREEN_HEIGHT)
+        
+    def isDead(self):
+        
+        return (self.alpha <= 0) or (self.isOffScreen())
+    
+
+#=======================================================================
+# ParticalSystem class
+#=======================================================================
+
+class ParticalSystem():
+    
+    def __init__(self, x, y, angle):
+        
+        self.pos = Vector2(x, y)
+        self.particals = []
+        self.max_particles = 20
+        self.angle = angle
+        
+    def burst(self):
+        
+        for n in range(0, self.max_particles):
+            # vary the angle a little bit
+            a = (self.angle + random.uniform(-20, 20)) % 360
+            p = Partical(self.pos, a)
+            self.particals.append(p)
+        
+    def update(self):
+        
+        cp = [p for p in self.particals if not p.isDead()]
+        self.particals = cp
+        for p in self.particals:
+            p.update()
+            p.draw()
+        
+    def isDead(self):
+        
+        return len(self.particals) == 0
+        
+
+#=======================================================================
+# ParticalSystemController class
+#=======================================================================
+
+class ParticalSystemController():
+    
+    def __init__(self):
+        
+        self.systems = []
+        
+    def spawn(self, x, y, angle):
+        
+        system = ParticalSystem(x, y, angle)
+        self.systems.append(system)
+        system.burst()
+        
+    def killAll(self):
+        
+        self.systems = []
+    
+    def update(self):
+        
+        cp = [ps for ps in self.systems if not ps.isDead()]
+        self.systems = cp
+        for s in self.systems:
+            s.update()       
+
+        
 #=======================================================================
 # Star class
 #=======================================================================
@@ -128,13 +226,11 @@ class Star():
         self.rect = self.image.get_rect()
         self.image.fill(COLOUR_STARS)
 
-        
     def reset(self):
         
         self.position.y = 0
         self.position.x = random.randint(0, SCREEN_WIDTH)
         self.velocity.y = 1 + random.random() * 10
-        
         
     def update(self):
         
@@ -146,7 +242,6 @@ class Star():
         self.position.add(self.velocity)
         self.rect.x = self.position.x
         self.rect.y = self.position.y
-        
         
     def draw(self):
         
@@ -168,7 +263,6 @@ class StarField():
             star = Star()
             self.stars.append(star)
             
-        
     def update(self):
         
         for star in self.stars:
@@ -177,7 +271,6 @@ class StarField():
             if star.position.y > SCREEN_HEIGHT:
                 star.reset()
                 
- 
     def draw(self):
         
         for star in self.stars:
@@ -205,23 +298,19 @@ class Player():
         self.image = pygame.Surface([self.width, self.height])
         self.image.fill(COLOUR_WHITE)
         
-        
     def reset(self):
         
         self.position = Vector2(self.start_position.x, self.start_position.y)
         self.velocity.mult(0)
         self.acceleration.mult(0)
         
-        
     def up(self):
         
         self.acceleration.y -= self.acceleration_step
         
-        
     def down(self):
         
         self.acceleration.y += self.acceleration_step
-        
         
     def constrain(self):
         
@@ -232,8 +321,7 @@ class Player():
         elif self.position.y > self.maxposition_y:
             self.position.y = self.maxposition_y
             self.velocity.y = 0
-
-
+            
     def update(self):
         
         self.velocity.add(self.acceleration)
@@ -255,8 +343,6 @@ class Player():
         
         screen.blit(self.image, self.rect)
 
-        
-
 
 #=======================================================================
 # Balltrail class
@@ -273,11 +359,9 @@ class Balltrail():
         self.max_length = 30
         self.trail = []
         
-        
     def reset(self):
         
         self.trail.clear()
-        
         
     def update(self, x, y):
         
@@ -295,7 +379,6 @@ class Balltrail():
             # and add the current position of the ball    
             self.trail.append( (x, y) )
         
-        
     def draw(self):
         
         alpha = 0
@@ -304,8 +387,7 @@ class Balltrail():
             pygame.draw.rect(screen, [100, alpha, 100 + alpha], [r[0] + self.pad,r[1] + self.pad, 1 , 1])
             alpha += 2
         
-
-
+        
 #=======================================================================
 # Ball class
 #=======================================================================
@@ -325,7 +407,6 @@ class Ball():
         self.image.fill(COLOUR_WHITE)
         self.balltrail = Balltrail(size)
 
-    
     def reset(self):
         
         self.balltrail.reset()
@@ -339,7 +420,6 @@ class Ball():
         self.position = Vector2(SCREEN_WIDTH // 2 - self.width // 2, SCREEN_HEIGHT // 2 - self.height // 2)
         self.velocity = Vector2(ballx,bally) 
         
-
     def applyForce(self, f):
         
         # make a copy to preserve the original vector values
@@ -348,7 +428,6 @@ class Ball():
         fcopy.div(self.mass)
         self.acceleration.add(fcopy)
 
-        
     def update(self):
         
         # add acceleration to velocity
@@ -365,7 +444,6 @@ class Ball():
     
         self.balltrail.update(self.position.x,self.position.y)
 
-        
     def draw(self):
         
         self.balltrail.draw()
@@ -386,12 +464,9 @@ class Arena():
         self.player_score_position = Vector2((SCREEN_WIDTH // 2) - 300, (SCREEN_HEIGHT // 2)-52)
         self.opponent_score_position = Vector2((SCREEN_WIDTH // 2) + 180, (SCREEN_HEIGHT // 2)-52)
 
-
-        
     def update(self):
         
         pass
-        
         
     def draw(self):
         
@@ -399,8 +474,6 @@ class Arena():
         
         screen.blit(image_numbers[game.player_score % 10 ], (self.player_score_position.x, self.player_score_position.y))
         screen.blit(image_numbers[game.opponent_score % 10 ], (self.opponent_score_position.x, self.opponent_score_position.y))
-
-
 
 
 #=======================================================================
@@ -419,11 +492,11 @@ class Game():
         opponentspeed = 2.8
         ballsize = 8
         player_edge_offset = 10
-        
+
         # ball limits
         self.ball_max_speed_x = 8.0
         self.ball_max_speed_y = 8.0
-        self.ball_speed_step = 1.05
+        self.ball_speed_step = 1.2
         
         # these are the x positions that the ball is reset to following
         # a rectscollide with either bat to prevent ball going through bat
@@ -432,22 +505,19 @@ class Game():
         
         self.playerserve = True # this toggles who serves
         
-        self.gamestate = GAME_INTRO
-        
-        self.player = Player(player_edge_offset, (SCREEN_HEIGHT // 2) - playerheight // 2, playerwidth, playerheight, playerspeed)
-        self.opponent = Player(SCREEN_WIDTH - (player_edge_offset + playerwidth), (SCREEN_HEIGHT // 2) - playerheight // 2, playerwidth, playerheight, opponentspeed)
-        self.ball = Ball(ballsize)
-        self.arena = Arena()
-        self.noiseengine = NoiseEngine1D(random.randint(1,100))
-        self.starfield = StarField()
-        
+        self.gamestate = GAME_STATE_INTRO
         self.player_score = 0
         self.opponent_score = 0
-        
         self.wind = Vector2(0,0)
         self.wind_strength = 0.4
         
-
+        self.player      = Player(player_edge_offset, (SCREEN_HEIGHT // 2) - playerheight // 2, playerwidth, playerheight, playerspeed)
+        self.opponent    = Player(SCREEN_WIDTH - (player_edge_offset + playerwidth), (SCREEN_HEIGHT // 2) - playerheight // 2, playerwidth, playerheight, opponentspeed)
+        self.ball        = Ball(ballsize)
+        self.arena       = Arena()
+        self.noiseengine = NoiseEngine1D(random.randint(1,100))
+        self.starfield   = StarField()
+        self.psc         = ParticalSystemController()
         
     def checkcollisionBallEdges(self):
         
@@ -468,7 +538,6 @@ class Game():
             self.ball.velocity.y = -self.ball.velocity.y
             sound_blip2.play()
             
-            
     def checkcollisionBats(self):
         
         # check if ball is colliding with either bat. 
@@ -485,6 +554,8 @@ class Game():
             # a fudge to stop ball penetrating bat at higher ball speeds
             self.ball.position.x = self.ball_rebound_player_x
             self.batHit()
+            # spawn a partical system
+            self.psc.spawn(10, self.ball.position.y, PARTICALS_SPAWN_FROM_PLAYER)
             
         elif self.ball.rect.colliderect(self.opponent.rect):
             
@@ -494,7 +565,7 @@ class Game():
             # a fudge to stop ball penetrating bat at higher ball speeds
             self.ball.position.x = self.ball_rebound_opponent_x
             self.batHit()
-
+            self.psc.spawn(SCREEN_WIDTH-10, self.ball.position.y, PARTICALS_SPAWN_FROM_OPPONENT)
             
     def batHit(self):
         
@@ -513,9 +584,7 @@ class Game():
         # keep vel y within bounds
         if self.ball.velocity.y > self.ball_max_speed_y:
             self.ball.velocity.y = self.ball_max_speed_y
-
             
-
     def setWind(self):
         
         # gets a random direction and strength for the wind effect
@@ -524,7 +593,6 @@ class Game():
         self.wind.x = self.noiseengine.next(100) * (self.wind_strength / 4)
         self.wind.y = self.noiseengine.next() * self.wind_strength
         
-
     def reflectAngle(self, player):
         
         # returns an y velocity to reflect the ball at. 
@@ -535,7 +603,6 @@ class Game():
         # can then be multiplied to produce a y velocity for the ball
         
         return (((self.ball.position.y - player.position.y) / player.height) + -0.5) * 8
-        
         
     def moveOpponent(self):
         
@@ -548,7 +615,6 @@ class Game():
         elif self.opponent.position.y > self.ball.position.y - self.opponent.height // 2:
             self.opponent.up()
             
-        
     def checkBallInScorePosition(self):
     
         # if true score and reset game
@@ -561,7 +627,6 @@ class Game():
             self.player_score += 1
             self.resetFromScore()
             
-            
     def resetFromScore(self):
         
         # called after a score has been made
@@ -573,12 +638,13 @@ class Game():
     
         sound_score.play()
         self.resetPositions()
+        self.psc.killAll()
         
         # check if either player has won the game
         # and switch the gamestate to gameover if it has
         
         if self.player_score == 5 or self.opponent_score == 5:
-            self.gamestate = GAME_OVER
+            self.gamestate = GAME_STATE_OVER
             
     def resetFromWin(self):
         
@@ -588,7 +654,6 @@ class Game():
         self.opponent_score = 0
         self.resetPositions()
             
-
     def resetPositions(self):
         
         self.ball.reset()
@@ -596,19 +661,17 @@ class Game():
         self.opponent.reset()
         self.wind.mult(0)
         
-        
     def switchGameState(self):
         
-        if self.gamestate == GAME_INTRO:
+        if self.gamestate == GAME_STATE_INTRO:
             
-            self.gamestate = GAME_IN_PROGRESS
+            self.gamestate = GAME_STATE_IN_PROGRESS
             image_pong_title.set_alpha(75)
             
-        elif self.gamestate == GAME_OVER:
+        elif self.gamestate == GAME_STATE_OVER:
             
             self.resetFromWin()
-            self.gamestate = GAME_INTRO
-            
+            self.gamestate = GAME_STATE_INTRO
             
     def drawGameOver(self):
         
@@ -622,7 +685,6 @@ class Game():
         screen.blit(image_pong_game, (200 + randoff1 * jitter, 150 + randoff2 * jitter))
         screen.blit(image_pong_over, (400 + randoff2 * jitter, 250 + randoff1 * jitter))
         
-        
     def drawGameWon(self):
         
         randoff1 = self.noiseengine.next()
@@ -635,7 +697,6 @@ class Game():
         screen.blit(image_pong_you, (200 + randoff1 * jitter, 150 + randoff2 * jitter))
         screen.blit(image_pong_won, (400 + randoff2 * jitter, 250 + randoff1 * jitter))
         
-        
     def drawGameIntro(self):
         
         randoff1 = self.noiseengine.next()
@@ -646,17 +707,15 @@ class Game():
         
         screen.blit(image_pong_title, (200 + randoff1 * jitter, 200 + randoff2 * jitter))
 
-        
-
     def draw(self):
         
-        if self.gamestate == GAME_INTRO:
+        if self.gamestate == GAME_STATE_INTRO:
             
             self.starfield.update()
             self.starfield.draw()
             self.drawGameIntro()
             
-        elif self.gamestate == GAME_IN_PROGRESS:
+        elif self.gamestate == GAME_STATE_IN_PROGRESS:
             
             self.checkcollisionBallEdges()
             self.checkcollisionBats()
@@ -673,8 +732,9 @@ class Game():
             self.player.draw()
             self.opponent.draw()
             self.ball.draw()
+            self.psc.update()
             
-        elif self.gamestate == GAME_OVER:
+        elif self.gamestate == GAME_STATE_OVER:
             
             self.starfield.update()
             self.starfield.draw()
@@ -683,8 +743,7 @@ class Game():
                 self.drawGameWon()
             else:
                 self.drawGameOver()
-
-
+                
     def run(self):
         
         done = False
