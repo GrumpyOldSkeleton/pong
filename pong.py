@@ -1,6 +1,4 @@
-#!/usr/bin/env python
 
-import timeit
 import pygame
 import math
 import random
@@ -14,14 +12,18 @@ from vector import Vector2
 
 GAME_STATE_INTRO       = 0
 GAME_STATE_IN_PROGRESS = 1
-GAME_STATE_OVER        = 2
+GAME_STATE_SCORED      = 2
+GAME_STATE_OVER        = 3
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 600
 ORIGINX = SCREEN_WIDTH // 2
 ORIGINY = SCREEN_HEIGHT // 2
-COLOUR_BLACK = [0,0,0]
-COLOUR_WHITE = [255,255,255]
-COLOUR_STARS = [100,50,255]
+COLOUR_BLACK  = [0,0,0]
+COLOUR_WHITE  = [255,255,255]
+COLOUR_STARS  = [100,50,255]
+COLOUR_YELLOW = [255,255,0]
+COLOUR_RED    = [255,0,0]
+
 PARTICALS_SPAWN_FROM_OPPONENT = 180
 PARTICALS_SPAWN_FROM_PLAYER   = 0
 
@@ -117,17 +119,18 @@ def clamp(n, minn, maxn):
 
 class Partical():
     
-    def __init__(self, v, angle):
+    def __init__(self, pos, angle, speed, size, colour):
         
-        self.pos = Vector2(v.x, v.y)
+        self.pos = Vector2(pos.x, pos.y)
         self.vel = Vector2(0, 0)
-        self.acc = Vector2(0,0)        
-        # set the initial acceleration of the partical
+        self.acc = Vector2(0,0)     
+        self.size = size
+        self.alpha = 255   
         self.acc.setFromAngle(angle)
-        self.acc.normalise()
-        self.acc.mult(random.uniform(0.1, 0.7))
-        self.size = random.randint(1, 3)
-        self.alpha = 255
+        self.acc.mult(speed)
+        self.image = pygame.Surface([self.size, self.size])
+        self.image.fill(colour)
+        self.image.set_alpha(self.alpha)
         
     def update(self):
         
@@ -135,10 +138,11 @@ class Partical():
         self.pos.add(self.vel)
         self.alpha -= abs(self.vel.y)
         self.alpha = max(0,self.alpha)
+        self.image.set_alpha(self.alpha)
         
     def draw(self):
         
-        pygame.draw.rect(screen,[0, self.alpha, self.alpha],[self.pos.x,self.pos.y,self.size,self.size])
+        screen.blit(self.image, (self.pos.x, self.pos.y))
         
     def isOffScreen(self):
         
@@ -155,21 +159,39 @@ class Partical():
 
 class ParticalSystem():
     
-    def __init__(self, x, y, angle):
+    def __init__(self, x, y, mx = 20):
         
         self.pos = Vector2(x, y)
         self.particals = []
-        self.max_particles = 20
-        self.angle = angle
+        self.max_particles = mx
         
-    def burst(self):
+    def killAll(self):
         
+        self.particals = []
+        
+    def burstDirection(self, angle, spread):
+        
+        self.killAll()
         for n in range(0, self.max_particles):
             # vary the angle a little bit
-            a = (self.angle + random.uniform(-20, 20)) % 360
-            p = Partical(self.pos, a)
+            angle = (angle + random.uniform(-spread, spread)) % 360
+            speed = random.uniform(0.1, 0.7)
+            size = random.randint(1, 4)
+            p = Partical(self.pos, angle, speed, size, COLOUR_YELLOW)
             self.particals.append(p)
+            
+    def burstCircle(self):
         
+        self.killAll()
+        step = 360 // self.max_particles
+        for n in range(0, self.max_particles):
+            angle = n * step
+            speed = random.uniform(0.1, 0.7)
+            size = random.randint(1, 4)
+            colour = COLOUR_RED
+            p = Partical(self.pos, angle, speed, size, colour)
+            self.particals.append(p)
+            
     def update(self):
         
         cp = [p for p in self.particals if not p.isDead()]
@@ -193,11 +215,21 @@ class ParticalSystemController():
         
         self.systems = []
         
-    def spawn(self, x, y, angle):
+    def spawn(self, x, y, mx):
         
-        system = ParticalSystem(x, y, angle)
+        system = ParticalSystem(x, y, mx)
         self.systems.append(system)
-        system.burst()
+        return system
+        
+    def spawnBurstDirection(self, x, y, angle, spread, max_particals = 20):
+        
+        system = self.spawn(x, y, max_particals)
+        system.burstDirection(angle, spread)
+        
+    def spawnBurstCircle(self, x, y, max_particals = 20):
+        
+        system = self.spawn(x, y, max_particals)
+        system.burstCircle()
         
     def killAll(self):
         
@@ -506,6 +538,7 @@ class Game():
         self.playerserve = True # this toggles who serves
         
         self.gamestate = GAME_STATE_INTRO
+        self.scored_frames_elapsed = 0
         self.player_score = 0
         self.opponent_score = 0
         self.wind = Vector2(0,0)
@@ -526,17 +559,16 @@ class Game():
         # within the bounds of the court. This 'bounces' the ball
         # back off the edges
         
-        if self.ball.position.y < 0:
-            
-            self.ball.position.y = 0
-            self.ball.velocity.y = -self.ball.velocity.y
+        if (self.ball.position.y < 0) or (self.ball.position.y > SCREEN_HEIGHT-self.ball.height):
+            if self.ball.position.y < 0:
+                self.ball.position.y = 0
+                self.ball.velocity.y = -self.ball.velocity.y
+            else:
+                self.ball.position.y = SCREEN_HEIGHT-self.ball.height
+                self.ball.velocity.y = -self.ball.velocity.y
+                
             sound_blip2.play()
-            
-        elif self.ball.position.y > SCREEN_HEIGHT-self.ball.height:
-            
-            self.ball.position.y = SCREEN_HEIGHT-self.ball.height
-            self.ball.velocity.y = -self.ball.velocity.y
-            sound_blip2.play()
+            self.psc.spawnBurstCircle(self.ball.position.x, self.ball.position.y)
             
     def checkcollisionBats(self):
         
@@ -555,17 +587,15 @@ class Game():
             self.ball.position.x = self.ball_rebound_player_x
             self.batHit()
             # spawn a partical system
-            self.psc.spawn(10, self.ball.position.y, PARTICALS_SPAWN_FROM_PLAYER)
+            self.psc.spawnBurstDirection(30, self.ball.position.y, PARTICALS_SPAWN_FROM_PLAYER, 4)
             
         elif self.ball.rect.colliderect(self.opponent.rect):
             
             self.ball.velocity.y = self.reflectAngle(self.opponent)
             self.ball.velocity.x = -self.ball.velocity.x
-            
-            # a fudge to stop ball penetrating bat at higher ball speeds
             self.ball.position.x = self.ball_rebound_opponent_x
             self.batHit()
-            self.psc.spawn(SCREEN_WIDTH-10, self.ball.position.y, PARTICALS_SPAWN_FROM_OPPONENT)
+            self.psc.spawnBurstDirection(SCREEN_WIDTH-30, self.ball.position.y, PARTICALS_SPAWN_FROM_OPPONENT, 4)
             
     def batHit(self):
         
@@ -621,11 +651,12 @@ class Game():
     
         if self.ball.position.x < 0:
             self.opponent_score += 1
-            self.resetFromScore()
-            
-        if self.ball.position.x > SCREEN_WIDTH:
+            self.psc.spawnBurstDirection(1, self.ball.position.y, PARTICALS_SPAWN_FROM_PLAYER, 20, 100)
+            self.gamestate = GAME_STATE_SCORED
+        elif self.ball.position.x > SCREEN_WIDTH:
             self.player_score += 1
-            self.resetFromScore()
+            self.psc.spawnBurstDirection(SCREEN_WIDTH-1, self.ball.position.y, PARTICALS_SPAWN_FROM_OPPONENT, 20, 100)
+            self.gamestate = GAME_STATE_SCORED
             
     def resetFromScore(self):
         
@@ -638,13 +669,14 @@ class Game():
     
         sound_score.play()
         self.resetPositions()
-        self.psc.killAll()
         
         # check if either player has won the game
         # and switch the gamestate to gameover if it has
         
         if self.player_score == 5 or self.opponent_score == 5:
             self.gamestate = GAME_STATE_OVER
+        else:
+            self.gamestate = GAME_STATE_IN_PROGRESS
             
     def resetFromWin(self):
         
@@ -660,6 +692,7 @@ class Game():
         self.player.reset()
         self.opponent.reset()
         self.wind.mult(0)
+        self.psc.spawnBurstCircle(ORIGINX, ORIGINY, 100)
         
     def switchGameState(self):
         
@@ -667,6 +700,7 @@ class Game():
             
             self.gamestate = GAME_STATE_IN_PROGRESS
             image_pong_title.set_alpha(75)
+            self.resetPositions()
             
         elif self.gamestate == GAME_STATE_OVER:
             
@@ -734,6 +768,18 @@ class Game():
             self.ball.draw()
             self.psc.update()
             
+        elif self.gamestate == GAME_STATE_SCORED:
+            
+            self.arena.draw()
+            self.starfield.update()
+            self.starfield.draw()
+            self.psc.update()
+            self.scored_frames_elapsed += 1
+            
+            if self.scored_frames_elapsed > 180:
+                self.scored_frames_elapsed = 0
+                self.resetFromScore()
+                
         elif self.gamestate == GAME_STATE_OVER:
             
             self.starfield.update()
