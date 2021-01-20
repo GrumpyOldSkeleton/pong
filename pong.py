@@ -1,4 +1,3 @@
-
 import pygame
 import math
 import random
@@ -24,8 +23,8 @@ COLOUR_STARS  = [100,50,255]
 COLOUR_YELLOW = [255,255,0]
 COLOUR_RED    = [255,0,0]
 
-PARTICALS_SPAWN_FROM_OPPONENT = 180
-PARTICALS_SPAWN_FROM_PLAYER   = 0
+particles_SPAWN_FROM_OPPONENT = 180
+particles_SPAWN_FROM_PLAYER   = 0
 
 # ======================================================================
 # setup pygame
@@ -52,6 +51,7 @@ FILEPATH = pathlib.Path().cwd()
 sound_blip         = pygame.mixer.Sound(str(FILEPATH.joinpath('sounds' ,'blip.ogg')))
 sound_blip2        = pygame.mixer.Sound(str(FILEPATH.joinpath('sounds' ,'blip2.ogg')))
 sound_score        = pygame.mixer.Sound(str(FILEPATH.joinpath('sounds' ,'score.ogg')))
+sound_boom         = pygame.mixer.Sound(str(FILEPATH.joinpath('sounds' ,'boom.ogg')))
 image_pong_title   = pygame.image.load(str(FILEPATH.joinpath('png' ,'pong_title.png'))).convert()
 image_pong_numbers = pygame.image.load(str(FILEPATH.joinpath('png' ,'pong_numbers.png'))).convert()
 image_pong_game    = pygame.image.load(str(FILEPATH.joinpath('png' ,'pong_game.png'))).convert()
@@ -154,20 +154,20 @@ class Partical():
     
 
 #=======================================================================
-# ParticalSystem class
+# particlesystem class
 #=======================================================================
 
-class ParticalSystem():
+class particlesystem():
     
     def __init__(self, x, y, mx = 20):
         
         self.pos = Vector2(x, y)
-        self.particals = []
+        self.particles = []
         self.max_particles = mx
         
     def killAll(self):
         
-        self.particals = []
+        self.particles = []
         
     def burstDirection(self, angle, spread):
         
@@ -178,7 +178,7 @@ class ParticalSystem():
             speed = random.uniform(0.1, 0.7)
             size = random.randint(1, 4)
             p = Partical(self.pos, angle, speed, size, COLOUR_YELLOW)
-            self.particals.append(p)
+            self.particles.append(p)
             
     def burstCircle(self):
         
@@ -190,26 +190,26 @@ class ParticalSystem():
             size = random.randint(1, 4)
             colour = COLOUR_RED
             p = Partical(self.pos, angle, speed, size, colour)
-            self.particals.append(p)
+            self.particles.append(p)
             
     def update(self):
         
-        cp = [p for p in self.particals if not p.isDead()]
-        self.particals = cp
-        for p in self.particals:
+        cp = [p for p in self.particles if not p.isDead()]
+        self.particles = cp
+        for p in self.particles:
             p.update()
             p.draw()
         
     def isDead(self):
         
-        return len(self.particals) == 0
+        return len(self.particles) == 0
         
 
 #=======================================================================
-# ParticalSystemController class
+# particlesystemController class
 #=======================================================================
 
-class ParticalSystemController():
+class particlesystemController():
     
     def __init__(self):
         
@@ -217,18 +217,18 @@ class ParticalSystemController():
         
     def spawn(self, x, y, mx):
         
-        system = ParticalSystem(x, y, mx)
+        system = particlesystem(x, y, mx)
         self.systems.append(system)
         return system
         
-    def spawnBurstDirection(self, x, y, angle, spread, max_particals = 20):
+    def spawnBurstDirection(self, x, y, angle, spread, max_particles = 20):
         
-        system = self.spawn(x, y, max_particals)
+        system = self.spawn(x, y, max_particles)
         system.burstDirection(angle, spread)
         
-    def spawnBurstCircle(self, x, y, max_particals = 20):
+    def spawnBurstCircle(self, x, y, max_particles = 20):
         
-        system = self.spawn(x, y, max_particals)
+        system = self.spawn(x, y, max_particles)
         system.burstCircle()
         
     def killAll(self):
@@ -550,7 +550,7 @@ class Game():
         self.arena       = Arena()
         self.noiseengine = NoiseEngine1D(random.randint(1,100))
         self.starfield   = StarField()
-        self.psc         = ParticalSystemController()
+        self.psc         = particlesystemController()
         
     def checkcollisionBallEdges(self):
         
@@ -587,7 +587,7 @@ class Game():
             self.ball.position.x = self.ball_rebound_player_x
             self.batHit()
             # spawn a partical system
-            self.psc.spawnBurstDirection(30, self.ball.position.y, PARTICALS_SPAWN_FROM_PLAYER, 4)
+            self.psc.spawnBurstDirection(30, self.ball.position.y, particles_SPAWN_FROM_PLAYER, 4)
             
         elif self.ball.rect.colliderect(self.opponent.rect):
             
@@ -595,7 +595,7 @@ class Game():
             self.ball.velocity.x = -self.ball.velocity.x
             self.ball.position.x = self.ball_rebound_opponent_x
             self.batHit()
-            self.psc.spawnBurstDirection(SCREEN_WIDTH-30, self.ball.position.y, PARTICALS_SPAWN_FROM_OPPONENT, 4)
+            self.psc.spawnBurstDirection(SCREEN_WIDTH-30, self.ball.position.y, particles_SPAWN_FROM_OPPONENT, 4)
             
     def batHit(self):
         
@@ -651,11 +651,13 @@ class Game():
     
         if self.ball.position.x < 0:
             self.opponent_score += 1
-            self.psc.spawnBurstDirection(1, self.ball.position.y, PARTICALS_SPAWN_FROM_PLAYER, 20, 100)
+            self.psc.spawnBurstDirection(1, self.ball.position.y, particles_SPAWN_FROM_PLAYER, 20, 100)
+            sound_score.play()
             self.gamestate = GAME_STATE_SCORED
         elif self.ball.position.x > SCREEN_WIDTH:
             self.player_score += 1
-            self.psc.spawnBurstDirection(SCREEN_WIDTH-1, self.ball.position.y, PARTICALS_SPAWN_FROM_OPPONENT, 20, 100)
+            self.psc.spawnBurstDirection(SCREEN_WIDTH-1, self.ball.position.y, particles_SPAWN_FROM_OPPONENT, 20, 100)
+            sound_score.play()
             self.gamestate = GAME_STATE_SCORED
             
     def resetFromScore(self):
@@ -666,8 +668,6 @@ class Game():
         # toggle the server
         
         self.playerserve = not self.playerserve
-    
-        sound_score.play()
         self.resetPositions()
         
         # check if either player has won the game
@@ -688,11 +688,13 @@ class Game():
             
     def resetPositions(self):
         
+        # called at each serve
         self.ball.reset()
         self.player.reset()
         self.opponent.reset()
         self.wind.mult(0)
         self.psc.spawnBurstCircle(ORIGINX, ORIGINY, 100)
+        sound_boom.play()
         
     def switchGameState(self):
         
